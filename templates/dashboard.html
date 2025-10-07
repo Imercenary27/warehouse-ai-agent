@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Warehouse Management Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f5f7fa; color: #333; }
+        .header { background: linear-gradient(135deg,#667eea,#764ba2); color:#fff; padding:1.5rem 2rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .header h1{font-size: 2.5rem; font-weight: 300;}
+        .header p{margin-top:.5rem; opacity:0.9;}
+        .container{max-width:1400px;margin:0 auto;padding:2rem;}
+        .dashboard-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:2rem;margin-bottom:2rem;}
+        .card{background:#fff;border-radius:12px;padding:1.5rem;box-shadow:0 4px 12px rgba(0,0,0,0.1);}
+        .stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;}
+        .stat-item{text-align:center;padding:1rem;background:#f8f9ff;border-radius:8px;}
+        .stat-value{font-size:2rem;font-weight:bold;color:#667eea;}
+        .stat-label{color:#666;font-size:.9rem;margin-top:.25rem;}
+        .btn{background:#667eea;color:#fff;border:none;padding:.75rem 1.5rem;border-radius:8px;cursor:pointer;font-size:1rem;margin:.25rem;transition:background .3s;}
+        .btn:hover{background:#5a6fd8;}
+        .btn-success{background:#4caf50;}
+        .btn-warning{background:#ff9800;}
+        .btn-danger{background:#f44336;}
+        .form-group{margin-bottom:1rem;}
+        .form-group label{display:block;margin-bottom:.5rem;font-weight:500;}
+        .form-group input,.form-group select{width:100%;padding:.75rem;border:2px solid #e1e5e9;border-radius:6px;font-size:1rem;}
+        .form-group input:focus,.form-group select:focus{outline:none;border-color:#667eea;}
+        .table{width:100%;border-collapse:collapse;margin-top:1rem;}
+        .table th,.table td{padding:.75rem;text-align:left;border-bottom:1px solid #e1e5e9;}
+        .table th{background:#f8f9ff;font-weight:600;color:#667eea;}
+        .alert{padding:1rem;border-radius:6px;margin-bottom:1rem;}
+        .alert-warning{background:#fff3cd;border:1px solid #ffeaa7;color:#856404;}
+        .alert-danger{background:#f8d7da;border:1px solid #f5c6cb;color:#721c24;}
+        .badge{display:inline-block;padding:.25rem .5rem;font-size:.75rem;font-weight:500;border-radius:4px;}
+        .badge-success{background:#d4edda;color:#155724;}
+        .badge-warning{background:#fff3cd;color:#856404;}
+        .badge-danger{background:#f8d7da;color:#721c24;}
+        .loading{text-align:center;padding:2rem;color:#666;}
+        .modal{display:none;position:fixed;z-index:1000;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,0.5);}
+        .modal-content{background:#fff;margin:5% auto;padding:2rem;border-radius:12px;width:90%;max-width:500px;}
+        .close{color:#aaa;float:right;font-size:28px;font-weight:bold;cursor:pointer;}
+        .close:hover{color:black;}
+        @media(max-width:768px){.dashboard-grid{grid-template-columns:1fr;}.stats-grid{grid-template-columns:1fr;}}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🤖 AI Warehouse Management</h1>
+        <p>Intelligent stock and commodity management system</p>
+    </div>
+
+    <div class="container">
+        <div class="card">
+            <h3>📊 Dashboard Overview</h3>
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-item">
+                    <div class="stat-value" id="totalProducts">-</div>
+                    <div class="stat-label">Total Products</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="totalValue">₹-</div>
+                    <div class="stat-label">Total Value</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="lowStockItems">-</div>
+                    <div class="stat-label">Low Stock Items</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="activeAlerts">-</div>
+                    <div class="stat-label">Active Alerts</div>
+                </div>
+            </div>
+            <button class="btn" onclick="refreshData()">🔄 Refresh Data</button>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="card">
+                <h3>⚡ Quick Actions</h3>
+                <button class="btn btn-success" onclick="showAddProductModal()">➕ Add Product</button>
+                <button class="btn btn-warning" onclick="showUpdateStockModal()">📦 Update Stock</button>
+                <button class="btn" onclick="loadRecommendations()">🎯 View Recommendations</button>
+                <button class="btn" onclick="loadForecast()">📈 Generate Forecasts</button>
+            </div>
+
+            <div class="card">
+                <h3>🚨 Active Alerts</h3>
+                <div id="alertsContainer">
+                    <div class="loading">Loading alerts...</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>🎯 AI Reorder Recommendations</h3>
+                <div id="recommendationsContainer">
+                    <div class="loading">Click "View Recommendations" to load AI suggestions...</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>📊 Transaction Trends</h3>
+                <canvas id="transactionChart" width="400" height="200"></canvas>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>📦 Products & Inventory</h3>
+            <div style="overflow-x: auto;">
+                <table class="table" id="productsTable">
+                    <thead>
+                        <tr>
+                            <th>SKU</th>
+                            <th>Name</th>
+                            <th>Category</th>
+                            <th>Current Stock</th>
+                            <th>Unit Price</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td colspan="7" class="loading">Loading products...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="addProductModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('addProductModal')">&times;</span>
+            <h3>Add New Product</h3>
+            <form id="addProductForm">
+                <div class="form-group">
+                    <label>SKU:</label>
+                    <input type="text" id="productSku" required>
+                </div>
+                <div class="form-group">
+                    <label>Name:</label>
+                    <input type="text" id="productName" required>
+                </div>
+                <div class="form-group">
+                    <label>Category:</label>
+                    <select id="productCategory" required>
+                        <option value="">Select Category</option>
+                        <option value="Grains">Grains</option>
+                        <option value="Pulses">Pulses</option>
+                        <option value="Oils">Oils</option>
+                        <option value="Sweeteners">Sweeteners</option>
+                        <option value="Spices">Spices</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Unit Price (₹):</label>
+                    <input type="number" id="productPrice" step="0.01" required>
+                </div>
+                <div class="form-group">
+                    <label>Min Stock Level:</label>
+                    <input type="number" id="productMinStock" value="10" required>
+                </div>
+                <div class="form-group">
+                    <label>Max Stock Level:</label>
+                    <input type="number" id="productMaxStock" value="1000" required>
+                </div>
+                <button type="submit" class="btn btn-success">Add Product</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="updateStockModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('updateStockModal')">&times;</span>
+            <h3>Update Stock</h3>
+            <form id="updateStockForm">
+                <div class="form-group">
+                    <label>Product:</label>
+                    <select id="stockProductId" required>
+                        <option value="">Select Product</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Transaction Type:</label>
+                    <select id="transactionType" required>
+                        <option value="IN">Stock In</option>
+                        <option value="OUT">Stock Out</option>
+                        <option value="ADJUSTMENT">Adjustment</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Quantity:</label>
+                    <input type="number" id="stockQuantity" required>
+                </div>
+                <div class="form-group">
+                    <label>Price (₹) - Optional:</label>
+                    <input type="number" id="stockPrice" step="0.01">
+                </div>
+                <button type="submit" class="btn btn-success">Update Stock</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script>
+        let products = [], alerts = [], recommendations = [];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadProducts();
+            loadAlerts();
+            loadAnalytics();
+        });
+
+        async function loadProducts() {
+            try {
+                const res = await fetch('/api/products');
+                products = await res.json();
+                renderProductsTable();
+                populateProductSelects();
+            } catch (e) {
+                alert('❌ Failed to load products');
+            }
+        }
+
+        async function loadAlerts() {
+            try {
+                const res = await fetch('/api/alerts');
+                alerts = await res.json();
+                renderAlerts();
+            } catch (e) { console.error(e); }
+        }
+
+        async function loadAnalytics() {
+            try {
+                const res = await fetch('/api/analytics');
+                const data = await res.json();
+                updateStats(data.stats);
+                renderTransactionChart(data.recent_transactions);
+            } catch (e) { console.error(e); }
+        }
+
+        async function loadRecommendations() {
+            document.getElementById('recommendationsContainer').innerHTML =
+                '<div class="loading">Loading recommendations...</div>';
+            try {
+                const res = await fetch('/api/recommendations');
+                recommendations = await res.json();
+                renderRecommendations();
+            } catch (e) {
+                alert('❌ Failed to load recommendations');
+            }
+        }
+
+        async function addProduct(data) {
+            const res = await fetch('/api/products', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify(data)
+            });
+            return res.json();
+        }
+
+        async function updateStock(productId, stockData) {
+            const res = await fetch(`/api/inventory/${productId}`, {
+                method: 'PUT',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify(stockData)
+            });
+            return res.json();
+        }
+
+        function renderProductsTable() {
+            const tbody = document.querySelector('#productsTable tbody');
+            if (!products.length) {
+                tbody.innerHTML = '<tr><td colspan="7" class="loading">No products found</td></tr>';
+                return;
+            }
+            tbody.innerHTML = products.map(p => `
+                <tr>
+                    <td><strong>${p.sku}</strong></td>
+                    <td>${p.name}</td>
+                    <td>${p.category}</td>
+                    <td>${p.current_stock||0}</td>
+                    <td>₹${p.unit_price}</td>
+                    <td>${stockBadge(p)}</td>
+                    <td><button class="btn" onclick="generateForecast(${p.id})">📈 Forecast</button></td>
+                </tr>
+            `).join('');
+        }
+
+        function stockBadge(p) {
+            const s = p.current_stock||0;
+            if (s===0) return '<span class="badge badge-danger">Out of Stock</span>';
+            if (s<=p.min_stock_level) return '<span class="badge badge-warning">Low Stock</span>';
+            if (s>=p.max_stock_level) return '<span class="badge badge-warning">Overstock</span>';
+            return '<span class="badge badge-success">In Stock</span>';
+        }
+
+        function renderAlerts() {
+            const c = document.getElementById('alertsContainer');
+            if (!alerts.length) {
+                c.innerHTML = '<p style="text-align:center;color:#28a745;">✅ No active alerts</p>';
+                return;
+            }
+            c.innerHTML = alerts.map(a => `
+                <div class="alert ${a.alert_type==='LOW_STOCK'?'alert-warning':'alert-danger'}">
+                    <strong>${a.product_name} (${a.sku})</strong><br>${a.message}
+                    <small style="display:block;opacity:.7;margin-top:.5rem;">
+                        ${new Date(a.created_at).toLocaleString()}
+                    </small>
+                </div>
+            `).join('');
+            document.getElementById('activeAlerts').textContent = alerts.length;
+        }
+
+        function renderRecommendations() {
+            const c = document.getElementById('recommendationsContainer');
+            if (!recommendations.length) {
+                c.innerHTML = '<p style="text-align:center;color:#28a745;">✅ No reorder recommendations</p>';
+                return;
+            }
+            c.innerHTML = recommendations.map(r => `
+                <div class="alert alert-warning">
+                    <strong>${r.name} (${r.sku})</strong><br>
+                    Current: ${r.current_quantity} units<br>
+                    Recommended: <strong>${r.recommended_order_quantity}</strong><br>
+                    Forecast (30d): ${r.predicted_30_day_demand} units<br>
+                    <span class="badge badge-${r.urgency==='HIGH'?'danger':'warning'}">
+                        ${r.urgency} Priority
+                    </span>
+                </div>
+            `).join('');
+        }
+
+        function updateStats(s) {
+            document.getElementById('totalProducts').textContent = s.total_products;
+            document.getElementById('totalValue').textContent = '₹'+s.total_inventory_value.toLocaleString();
+            document.getElementById('lowStockItems').textContent = s.low_stock_items;
+            document.getElementById('activeAlerts').textContent = s.active_alerts;
+        }
+
+        function renderTransactionChart(data) {
+            const ctx = document.getElementById('transactionChart').getContext('2d');
+            const dates = [...new Set(data.map(d=>d.date))].sort();
+            const inData = dates.map(d=>data.filter(x=>x.date===d&&x.transaction_type==='IN').reduce((a,x)=>a+x.count,0));
+            const outData = dates.map(d=>data.filter(x=>x.date===d&&x.transaction_type==='OUT').reduce((a,x)=>a+x.count,0));
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [
+                        { label:'Stock In', data:inData, borderColor:'#4caf50', backgroundColor:'rgba(76,175,80,0.1)', tension:0.4 },
+                        { label:'Stock Out', data:outData, borderColor:'#f44336', backgroundColor:'rgba(244,67,54,0.1)', tension:0.4 }
+                    ]
+                },
+                options:{responsive:true,scales:{y:{beginAtZero:true}}}
+            });
+        }
+
+        // Modal & Form logic
+        function showAddProductModal() { document.getElementById('addProductModal').style.display='block'; }
+        function showUpdateStockModal() { document.getElementById('updateStockModal').style.display='block'; }
+        function closeModal(id) { document.getElementById(id).style.display='none'; }
+
+        function populateProductSelects() {
+            const sel = document.getElementById('stockProductId');
+            sel.innerHTML = '<option value="">Select Product</option>' +
+                products.map(p=>`<option value="${p.id}">${p.name} (${p.sku})</option>`).join('');
+        }
+
+        document.getElementById('addProductForm').addEventListener('submit', async e=>{
+            e.preventDefault();
+            const data = {
+                sku: document.getElementById('productSku').value,
+                name: document.getElementById('productName').value,
+                category: document.getElementById('productCategory').value,
+                unit_price: parseFloat(document.getElementById('productPrice').value),
+                min_stock: parseInt(document.getElementById('productMinStock').value),
+                max_stock: parseInt(document.getElementById('productMaxStock').value)
+            };
+            const res = await addProduct(data);
+            if (res.success) {
+                alert('✅ Product added');
+                closeModal('addProductModal');
+                loadProducts(); loadAnalytics();
+            } else alert('❌ '+res.error);
+        });
+
+        document.getElementById('updateStockForm').addEventListener('submit', async e=>{
+            e.preventDefault();
+            const pid = parseInt(document.getElementById('stockProductId').value);
+            const stockData = {
+                quantity: parseInt(document.getElementById('stockQuantity').value),
+                transaction_type: document.getElementById('transactionType').value,
+                price: document.getElementById('stockPrice').value?parseFloat(document.getElementById('stockPrice').value):null
+            };
+            const res = await updateStock(pid, stockData);
+            if (res.success) {
+                alert('✅ Stock updated');
+                closeModal('updateStockModal');
+                loadProducts(); loadAlerts(); loadAnalytics();
+            } else alert('❌ '+res.error);
+        });
+
+        function refreshData() {
+            loadProducts(); loadAlerts(); loadAnalytics();
+            alert('✅ Data refreshed');
+        }
+
+        async function generateForecast(pid) {
+            const res = await fetch(`/api/forecast/${pid}?days=30`);
+            const json = await res.json();
+            if (json.error) alert('❌ '+json.error);
+            else alert(`30-day demand: ${json.total_predicted_demand} units`);
+        }
+
+        function loadForecast() {
+            if (!products.length) return alert('❌ No products');
+            generateForecast(products[0].id);
+        }
+
+        window.onclick = e => {
+            if (e.target.classList.contains('modal')) e.target.style.display='none';
+        };
+    </script>
+</body>
+</html>
